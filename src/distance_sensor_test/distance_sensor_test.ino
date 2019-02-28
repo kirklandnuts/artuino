@@ -32,5 +32,5 @@ void loop() {
     Serial.println(" out of range ");
   }
     
-  delay(100);
+  delay(5);
 }

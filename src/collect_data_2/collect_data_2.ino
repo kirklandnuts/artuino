@@ -1,10 +1,7 @@
 // VL53L0X (distance sensor) BEGIN
 #include "Adafruit_VL53L0X.h"
 Adafruit_VL53L0X lox = Adafruit_VL53L0X();
-// VL53L0X (distance sensor) END     
-   
-// User defined function that returns sum of 
-// arr[] using accumulate() library function. 
+// VL53L0X (distance sensor) END
 
 // MPU6050 (gyroscope/accelerometer) BEGIN
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
@@ -40,14 +37,10 @@ MPU6050 mpu;
    The solution requires a modification to the Arduino USBAPI.h file, which
    is fortunately simple, but annoying. This will be fixed in the next IDE
    release. For more info, see these links:
-
    http://arduino.cc/forum/index.php/topic,109987.0.html
    http://code.google.com/p/arduino/issues/detail?id=958
  * ========================================================================= */
 
-
-const int n_calibration_readings = 100;
-int calibration_count = 0;
 
 #define LED_PIN 13 // (Arduino is 13, Teensy is 11, Teensy++ is 6)
 bool blinkState = false;
@@ -69,21 +62,6 @@ VectorFloat gravity;    // [x, y, z]            gravity vector
 float euler[3];         // [psi, theta, phi]    Euler angle container
 float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gravity vector
 
-int acc_x_arr[n_calibration_readings];
-int acc_y_arr[n_calibration_readings];
-int acc_z_arr[n_calibration_readings];
-float yaw_arr[n_calibration_readings];
-float pitch_arr[n_calibration_readings];
-float roll_arr[n_calibration_readings];
-
-float offset_yaw; 
-float offset_pitch; 
-float offset_roll; 
-int offset_acc_x;
-int offset_acc_y;
-int offset_acc_z;
-
-
 // packet structure for InvenSense teapot demo
 uint8_t teapotPacket[14] = { '$', 0x02, 0,0, 0,0, 0,0, 0,0, 0x00, 0x00, '\r', '\n' };
 
@@ -99,29 +77,6 @@ void dmpDataReady() {
 }
 // MPU6050 (gyroscope/accelerometer) END
 
-float float_avg(const float v[], int n )
-{
-    float sum = 0.0f;
-
-    for ( int i = 0; i < n; i++ )
-    {
-        sum += v[i]; //sum all the numbers in the vector v
-    }
-
-    return sum / n;
-}
-
-float int_avg(const int v[], int n )
-{
-    float sum = 0.0f;
-
-    for ( int i = 0; i < n; i++ )
-    {
-        sum += v[i]; //sum all the numbers in the vector v
-    }
-
-    return sum / n;
-}
 
 void setup() {
     Serial.begin(115200);
@@ -176,6 +131,12 @@ void setup() {
     Serial.println(F("Initializing DMP..."));
     devStatus = mpu.dmpInitialize();
 
+    // supply your own gyro offsets here, scaled for min sensitivity
+    mpu.setXGyroOffset(220);
+    mpu.setYGyroOffset(76);
+    mpu.setZGyroOffset(-85);
+    mpu.setZAccelOffset(1788); // 1688 factory default for my test chip
+
     // make sure it worked (returns 0 if so)
     if (devStatus == 0) {
         // turn on the DMP, now that it's ready
@@ -205,12 +166,12 @@ void setup() {
 
     // configure LED for output
     pinMode(LED_PIN, OUTPUT);
+    Serial.println("d,y,p,r,a_x,a_y,a_z");
 }
 
 
 void loop() {
-    int delay_val = 2;
-    int state = 0; //uncalibrated
+    VL53L0X_RangingMeasurementData_t measure;
     
     // if programming failed, don't try to do anything
     if (!dmpReady) return;
@@ -228,7 +189,7 @@ void loop() {
         // .
         // .
     }
-    VL53L0X_RangingMeasurementData_t measure;
+
     // reset interrupt flag and get INT_STATUS byte
     mpuInterrupt = false;
     mpuIntStatus = mpu.getIntStatus();
@@ -240,7 +201,7 @@ void loop() {
     if ((mpuIntStatus & 0x10) || fifoCount == 1024) {
         // reset so we can continue cleanly
         mpu.resetFIFO();
-        Serial.println(F("FIFO overflow!"));
+        // Serial.println(F("FIFO overflow!"));
 
     // otherwise, check for DMP data ready interrupt (this should happen frequently)
     } else if (mpuIntStatus & 0x02) {
@@ -264,101 +225,25 @@ void loop() {
         mpu.dmpGetLinearAccelInWorld(&aaWorld, &aaReal, &q);
         lox.rangingTest(&measure, false); // pass in 'true' to get debug data printout!
 
+
+        Serial.print(measure.RangeMilliMeter);
+        Serial.print(",");
+        Serial.print(ypr[0] * 180/M_PI);
+        Serial.print(",");
+        Serial.print(ypr[1] * 180/M_PI);
+        Serial.print(",");
+        Serial.print(ypr[2] * 180/M_PI);
+        Serial.print(",");
+        Serial.print(aaWorld.x);
+        Serial.print(",");
+        Serial.print(aaWorld.y);
+        Serial.print(",");
+        Serial.println(aaWorld.z);
+
         // blink LED to indicate activity
         blinkState = !blinkState;
         digitalWrite(LED_PIN, blinkState);
-
-        int distance = measure.RangeMilliMeter;
-        float yaw = ypr[0] * 180/M_PI;
-        float pitch = ypr[1] * 180/M_PI;
-        float roll = ypr[2] * 180/M_PI;
-        int acc_x = aaWorld.x;
-        int acc_y = aaWorld.y;
-        int acc_z = aaWorld.z;
-
-        if (state == 0) { //calibration
-            Serial.print(distance); 
-            Serial.print("\t");
-            Serial.print(yaw); 
-            Serial.print("\t");
-            Serial.print(pitch); 
-            Serial.print("\t");
-            Serial.print(roll); 
-            Serial.print("\t");
-            Serial.print(acc_x); 
-            Serial.print("\t");
-            Serial.print(acc_y); 
-            Serial.print("\t");
-            Serial.println(acc_z);
-            yaw_arr[calibration_count] = yaw;
-            pitch_arr[calibration_count] = pitch;
-            roll_arr[calibration_count] = roll;
-            acc_x_arr[calibration_count] = acc_x;
-            acc_y_arr[calibration_count] = acc_y;
-            acc_z_arr[calibration_count] = acc_z;
-            calibration_count++;
-            if (calibration_count == n_calibration_readings) {
-                offset_yaw = float_avg(yaw_arr, calibration_count); 
-                offset_pitch = float_avg(pitch_arr, calibration_count); 
-                offset_roll = float_avg(roll_arr, calibration_count); 
-                offset_acc_x = int_avg(acc_x_arr, calibration_count);
-                offset_acc_y = int_avg(acc_y_arr, calibration_count);
-                offset_acc_z = int_avg(acc_z_arr, calibration_count);
-
-                Serial.println("CALIBRATION COMPLETE");
-                Serial.println("OFFSET VALUES:");
-                Serial.println("y\tp\tr\ta_x\ta_y\ta_z");
-
-                Serial.print(offset_yaw); 
-                Serial.print("\t");
-                Serial.print(offset_pitch); 
-                Serial.print("\t");
-                Serial.println(offset_roll);
-                Serial.print("\t");
-                Serial.print(offset_acc_x); 
-                Serial.print("\t");
-                Serial.print(offset_acc_y); 
-                Serial.print("\t");
-                Serial.print(offset_acc_z); 
-
-                // mpu.setXAccelOffset(offset_acc_x);
-                // mpu.setYAccelOffset(offset_acc_y);
-                // mpu.setZAccelOffset(offset_acc_z);
-                // mpu.setXGyroOffset(offset_yaw);
-                // mpu.setYGyroOffset(offset_pitch);
-                // mpu.setZGyroOffset(offset_roll);
-                state++;
-            }   
-        } else if (state == 1) {
-            delay_val = 100;
-            state++;
-            Serial.println("\n\nCALIBRATED READINGS BEGIN:\n");
-            Serial.println("d\ty\tp\tr\ta_x\ta_y\ta_z");
-        } else if (state == 2) {
-            yaw = yaw - offset_yaw;
-            pitch = pitch - offset_pitch;
-            roll = roll - offset_roll;
-            acc_x = acc_x - offset_acc_x;
-            acc_y = acc_y - offset_acc_y;
-            acc_z = acc_z - offset_acc_z;
-
-            Serial.print(distance); 
-            Serial.print("\t");
-            Serial.print(yaw); 
-            Serial.print("\t");
-            Serial.print(pitch); 
-            Serial.print("\t");
-            Serial.print(roll); 
-            Serial.print("\t");
-            Serial.print(acc_x); 
-            Serial.print("\t");
-            Serial.print(acc_y); 
-            Serial.print("\t");
-            Serial.println(acc_z);
-        }
-
     } 
 
-
-  delay(delay_val);
+  delay(50);
 }
