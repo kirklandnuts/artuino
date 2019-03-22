@@ -59,14 +59,14 @@ play_drums = False
 play_bass = True
 play_chords = True
 bar_length = 1.75
-song_end = 24
+song_end = 14
 
 # Control beginning of solos and chords
 
 solo_start = 2
-solo_end = 12
-chord_start = 6
-chord_end = 14
+solo_end = 10
+chord_start = 4
+chord_end = 12
 
 # Channels
 
@@ -109,25 +109,32 @@ if __name__ == '__main__':
     
     print('\nInitializing device...')
     device = Device()
-    print('Device initialized\n')
+    print('Device initialized')
+
+    print('\n'*6)
+
+    print('Welcome to Artuino!\n')
+    print('You\'ll be creating music by moving your hand\nup and down.')
+    print('\nYour motion will control the melody. We\'ll provide\nsome bass notes and chords to back you up.')
+    print('\nPlease keep your palm faced down and over a\nsurface throughout.')
 
     print('\n\n ======================')
     print('| Press ENTER to begin |')
-    print(' ======================\n\n')
-    if input() == 'q':
-        sys.exit(1)
+    print(' ======================')
+    input()
 
-    # initialize device connection
+    print('\n\nMove your hand up and down to define your\nrange of motion.')
     time.sleep(2)
-    print('\nCalibrating device... (move your hand around)')
 
     loop = 1
     while loop < song_end:
         i = 0
         if loop == 2:
             min_d, max_d = device.define_range()
-            print('Calibration complete: defined range [{},{}]'.format(min_d, max_d))
+            print('Range of motion defined.'.format(min_d, max_d))
             print('\nGet ready to play!\n')
+        if loop == solo_end:
+                print('==== END NOTE CONTROL')
 
         for chord in chords:
             if loop == 1:
@@ -135,7 +142,9 @@ if __name__ == '__main__':
             if loop == 2:
                 print(4 - i)
                 if 4 - i == 1:
-                    print('\nHave fun!\n\n{}\n\n'.format('='*20))
+                    print('\nHave fun!\n\n')
+                    print('==== BEGIN NOTE CONTROL')
+            
             c = NoteContainer(chords[i])
             l = Note(c[0].name)
             n = Note('C')
@@ -165,9 +174,11 @@ if __name__ == '__main__':
             t = 0
 
             # constructing extended note selection
+            c_lowest = NoteContainer(([n.name, n.octave-2] for n in c)) 
             c_lower = NoteContainer(([n.name, n.octave-1] for n in c)) 
             c_upper = NoteContainer(([n.name, n.octave+1] for n in c))
-            c_extended = c_lower + c + c_upper
+            c_highest = NoteContainer(([n.name, n.octave-2] for n in c)) 
+            c_extended = c_lowest + c_lower + c + c_upper + c_highest
             c_extended = c_extended.remove_duplicate_notes()
 
             for beat in beats:
